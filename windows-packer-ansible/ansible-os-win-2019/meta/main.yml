@@ -1,0 +1,19 @@
+galaxy_info:
+  role_name: ansible-os-win-2019
+  author: GSA ISE
+  description: Ansible Role for Windows Server 2019
+  company: GSA
+  license: cc0-1.0
+  min_ansible_version: 2.7
+
+  platforms:
+   - name: Windows
+     versions:
+     - 2019
+  #
+  galaxy_tags:
+    - system
+    - windows
+    - hardening
+    - gsa
+dependencies: []

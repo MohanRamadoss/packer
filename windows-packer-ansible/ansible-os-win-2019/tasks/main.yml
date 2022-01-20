@@ -1,0 +1,7 @@
+---
+  - import_tasks: section01.yml
+#  - import_tasks: section02.yml
+#  - import_tasks: section09.yml
+#  - import_tasks: section17.yml
+#  - import_tasks: section18.yml
+#  - import_tasks: section19.yml

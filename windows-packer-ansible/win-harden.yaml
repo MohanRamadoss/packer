@@ -1,0 +1,11 @@
+---
+ - name: Harden Server   
+   hosts: all
+   become: yes
+   become_method: runas
+   become_user: Administrator
+   #remote_user: Administrator
+   #become: yes
+
+   roles:
+     - ansible-os-win-2019
