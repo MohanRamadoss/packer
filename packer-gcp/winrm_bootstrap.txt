@@ -1,0 +1,102 @@
+<powershell>
+# https://www.packer.io/docs/builders/amazon/ebs
+
+write-output "Running User Data Script"
+write-host "(host) Running User Data Script"
+
+Set-ExecutionPolicy Unrestricted -Scope LocalMachine -Force -ErrorAction Ignore
+
+# Don't set this before Set-ExecutionPolicy as it throws an error
+$ErrorActionPreference = "stop"
+
+# Remove HTTP listener
+Remove-Item -Path WSMan:\Localhost\listener\listener* -Recurse
+
+# Create a self-signed certificate to let ssl work
+$Cert = New-SelfSignedCertificate -CertstoreLocation Cert:\LocalMachine\My -DnsName "packer"
+New-Item -Path WSMan:\LocalHost\Listener -Transport HTTPS -Address * -CertificateThumbPrint $Cert.Thumbprint -Force
+
+# WinRM
+write-output "Setting up WinRM"
+write-host "(host) setting up WinRM"
+
+cmd.exe /c winrm quickconfig -q
+cmd.exe /c winrm set "winrm/config" '@{MaxTimeoutms="1800000"}'
+cmd.exe /c winrm set "winrm/config/winrs" '@{MaxMemoryPerShellMB="1024"}'
+cmd.exe /c winrm set "winrm/config/service" '@{AllowUnencrypted="true"}'
+cmd.exe /c winrm set "winrm/config/client" '@{AllowUnencrypted="true"}'
+cmd.exe /c winrm set "winrm/config/service/auth" '@{Basic="true"}'
+cmd.exe /c winrm set "winrm/config/client/auth" '@{Basic="true"}'
+cmd.exe /c winrm set "winrm/config/service/auth" '@{CredSSP="true"}'
+cmd.exe /c winrm set "winrm/config/listener?Address=*+Transport=HTTPS" "@{Port=`"5986`";Hostname=`"packer`";CertificateThumbprint=`"$($Cert.Thumbprint)`"}"
+cmd.exe /c netsh advfirewall firewall set rule group="remote administration" new enable=yes
+cmd.exe /c netsh firewall add portopening TCP 5986 "Port 5986"
+cmd.exe /c net stop winrm
+cmd.exe /c sc config winrm start= auto
+cmd.exe /c net start winrm
+
+
+##Create install folder and use for Gpo
+
+New-Item -ItemType Directory -Force -Path C:\install
+
+ 
+
+
+##Create install folder and use for Gpo
+
+New-Item -ItemType Directory -Force -Path C:\install
+
+Start-Transcript -Path "C:\Install\Posh_transcript.txt" -NoClobber
+
+ 
+
+# Download and install OpenSSH-Win64
+
+$AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
+
+[System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
+
+ 
+Write-Host "Downloading OpenSSH binary"
+Add-Content C:\Install\gcp_soi.log "[$(Get-Date)] => Installing OpenSSH`n"
+
+
+# Create the installation directory
+$installPath = "C:\Program Files\OpenSSH"
+New-Item -ItemType Directory -Path $installPath -Force
+
+# Download and extract the OpenSSH ZIP file from GCP bucket
+$bucketName = "windowsamigcp1"
+$objectName = "ssh/OpenSSH-Win64.zip"
+$output = Join-Path $installPath "OpenSSH-Win64.zip"
+Start-Transcript -Path (Join-Path $installPath "OpenSSH-Installation-Log.txt") -Append
+Write-Host "Downloading OpenSSH binary from GCP bucket..."
+gsutil cp "gs://$bucketName/$objectName" $output
+Expand-Archive -Path $output -DestinationPath $installPath
+
+# Install OpenSSH and start the service
+& "$installPath\OpenSSH-Win64\install-sshd.ps1"
+Set-Service -Name sshd -StartupType 'Automatic'
+Start-Service sshd
+
+# Configure the Windows Firewall
+$rule = New-NetFirewallRule -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow -Enabled True
+$rule | Set-NetFirewallRule
+
+# Change the default shell to PowerShell
+New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Type String -Force
+
+# Verify the OpenSSH service is running
+if (Get-Service -Name sshd -ErrorAction SilentlyContinue) {
+    Write-Host "OpenSSH server is installed and running."
+} else {
+    Write-Host "OpenSSH server installation failed."
+}
+
+Stop-Transcript
+
+ 
+
+</powershell>

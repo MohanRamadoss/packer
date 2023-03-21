@@ -1,0 +1,242 @@
+export PACKER_LOG_PATH="packer.log"
+export PACKER_LOG=10
+packer build -debug 2019gcp.pkr.hcl
+(WINDOWS)
+
+$ set PACKER_LOG=10
+$ set PACKER_LOG_PATH=c:\temp\packer log
+$ packer build -debug ubuntu_64.json
+
+
+
+
+# Create the installation directory
+$installPath = "C:\Program Files\OpenSSH"
+New-Item -ItemType Directory -Path $installPath -Force
+
+# Download and extract the OpenSSH ZIP file
+$url = "https://github.com/PowerShell/Win32-OpenSSH/releases/download/v8.1.0.0p1-Beta/OpenSSH-Win64.zip"
+$output = Join-Path $installPath "OpenSSH-Win64.zip"
+Invoke-WebRequest -Uri $url -OutFile $output
+Expand-Archive -Path $output -DestinationPath $installPath
+
+# Install OpenSSH and start the service
+& "$installPath\OpenSSH-Win64\install-sshd.ps1"
+Set-Service -Name sshd -StartupType 'Automatic'
+Start-Service sshd
+
+# Configure the Windows Firewall
+$rule = New-NetFirewallRule -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow -Enabled True
+$rule | Set-NetFirewallRule
+
+# Change the default shell to PowerShell
+New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Type String -Force
+
+# Verify the OpenSSH service is running
+if (Get-Service -Name sshd -ErrorAction SilentlyContinue) {
+    Write-Host "OpenSSH server is installed and running."
+} else {
+    Write-Host "OpenSSH server installation failed."
+}
+
+
+
+
+# Create the installation directory
+$installPath = "C:\Program Files\OpenSSH"
+New-Item -ItemType Directory -Path $installPath -Force
+
+# Download and extract the OpenSSH ZIP file from GCP bucket
+$bucketName = "windowsamigcp1"
+$objectName = "ssh/OpenSSH-Win64.zip"
+$output = Join-Path $installPath "OpenSSH-Win64.zip"
+Start-Transcript -Path (Join-Path $installPath "OpenSSH-Installation-Log.txt") -Append
+Write-Host "Downloading OpenSSH binary from GCP bucket..."
+gsutil cp "gs://$bucketName/$objectName" $output
+Expand-Archive -Path $output -DestinationPath $installPath
+
+# Install OpenSSH and start the service
+& "$installPath\OpenSSH-Win64\install-sshd.ps1"
+Set-Service -Name sshd -StartupType 'Automatic'
+Start-Service sshd
+
+# Configure the Windows Firewall
+$rule = New-NetFirewallRule -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow -Enabled True
+$rule | Set-NetFirewallRule
+
+# Change the default shell to PowerShell
+New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Type String -Force
+
+# Verify the OpenSSH service is running
+if (Get-Service -Name sshd -ErrorAction SilentlyContinue) {
+    Write-Host "OpenSSH server is installed and running."
+} else {
+    Write-Host "OpenSSH server installation failed."
+}
+
+Stop-Transcript
+
+
+
+
+# Set variables
+$bucketName = "windowsamigcp1"
+$objectName = "ssh/OpenSSH-Win64.zip"
+$output = "C:\install\OpenSSH-Win64.zip"
+
+# Install Google Cloud SDK
+Invoke-WebRequest -Uri "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-358.0.0-windows-x86_64-bundled-python.zip" -OutFile "C:\install\google-cloud-sdk.zip"
+Expand-Archive -Path "C:\install\google-cloud-sdk.zip" -DestinationPath "C:\Program Files\Google Cloud SDK"
+
+# Add Google Cloud SDK to system path
+$env:Path += ";C:\Program Files\Google Cloud SDK\bin"
+
+# Download OpenSSH binary from GCP bucket
+Write-Host "Downloading OpenSSH binary from GCP bucket..."
+gsutil cp "gs://$bucketName/$objectName" $output
+
+# Install OpenSSH
+Write-Host "Installing OpenSSH..."
+Expand-Archive -Path $output -DestinationPath "C:\Program Files\OpenSSH"
+& "C:\Program Files\OpenSSH\install-sshd.ps1"
+
+# Set service configuration
+Write-Host "Setting service configuration..."
+Set-Service -Name "sshd" -StartupType "Automatic"
+Start-Service -Name "sshd"
+
+# Add firewall rule
+Write-Host "Adding firewall rule..."
+New-NetFirewallRule -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow
+
+# Change default shell to PowerShell
+Write-Host "Changing default shell to PowerShell..."
+New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force | Out-Null
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force | Out-Null
+
+# Output installation log to file
+Stop-Transcript
+
+
+
+
+
+# Define variables
+$bucketName = "windowsamigcp2"
+$objectName = "ssh/google-cloud-sdk-358.0.0-windows-x86_64-bundled-python.zip"
+$output = "C:\install\$objectName"
+
+# Create install folder
+New-Item -ItemType Directory -Force -Path C:\install
+
+# Download Google Cloud SDK binary from GCP bucket
+Write-Host "Downloading Google Cloud SDK binary from GCP bucket..."
+#gcloud auth activate-service-account --key-file "C:\service_account.json"
+gsutil cp "gs://$bucketName/$objectName" $output
+
+# Extract the contents of the zip file
+Expand-Archive -LiteralPath $output -DestinationPath "C:\Program Files\Google\Cloud SDK" -Force
+
+# Add Google Cloud SDK to the system path
+$env:Path += ";C:\Program Files\Google\Cloud SDK\bin"
+
+# Initialize Google Cloud SDK
+gcloud init --console-only
+
+
+
+#########################################################################
+
+# Set variables
+$BucketName = "windowsamigcp2"
+$OpenSSHZipName = "OpenSSH-Win64.zip"
+$OpenSSHZipURL = "https://storage.googleapis.com/$BucketName/ssh/$OpenSSHZipName"
+$OpenSSHFolderName = "OpenSSH-Win64"
+$OpenSSHFolderPath = "C:\Program Files\OpenSSH"
+
+# Download and extract OpenSSH
+Invoke-WebRequest -Uri $OpenSSHZipURL -OutFile $OpenSSHZipName
+Expand-Archive -Path $OpenSSHZipName -DestinationPath $OpenSSHFolderPath
+
+# Configure OpenSSH service
+& "$OpenSSHFolderPath\$OpenSSHFolderName\install-sshd.ps1"
+& "$OpenSSHFolderPath\$OpenSSHFolderName\ssh-keygen.exe" -A
+Set-Service sshd -StartupType Automatic
+Start-Service sshd
+
+# Add firewall rule
+New-NetFirewallRule -Name "OpenSSH" -DisplayName "OpenSSH" -Enabled True -Direction Inbound -Protocol TCP -LocalPort 22
+
+# Set default shell to PowerShell
+Set-ItemProperty "HKLM:\SOFTWARE\OpenSSH" DefaultShell "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+
+
+###########################################################################
+
+
+# Create install directory
+New-Item -ItemType Directory -Path C:\install
+
+# Set variables
+$OpenSSHZipName = "OpenSSH-Win64.zip"
+$OpenSSHZipURL = "gs://windowsamigcp2/ssh/OpenSSH-Win64.zip"
+$OpenSSHFolderName = "OpenSSH-Win64"
+$OpenSSHFolderPath = "C:\Program Files\OpenSSH"
+
+# Download OpenSSH
+Start-Process -FilePath "gsutil.cmd" -ArgumentList "cp", $OpenSSHZipURL, "C:\install\" -Wait
+
+# Extract OpenSSH
+Expand-Archive -Path "C:\install\$OpenSSHZipName" -DestinationPath $OpenSSHFolderPath
+
+# Configure OpenSSH service
+& "$OpenSSHFolderPath\$OpenSSHFolderName\install-sshd.ps1"
+& "$OpenSSHFolderPath\$OpenSSHFolderName\ssh-keygen.exe" -A
+Set-Service sshd -StartupType Automatic
+Start-Service sshd
+
+# Add firewall rule
+New-NetFirewallRule -Name "OpenSSH" -DisplayName "OpenSSH" -Enabled True -Direction Inbound -Protocol TCP -LocalPort 22
+
+# Set default shell to PowerShell
+Set-ItemProperty "HKLM:\SOFTWARE\OpenSSH" DefaultShell "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+
+
+# Create install directory
+New-Item -ItemType Directory -Path C:\install
+
+# Set variables
+$OpenSSHZipName = "OpenSSH-Win64.zip"
+$OpenSSHZipURL = "gs://windowsamigcp2/ssh/OpenSSH-Win64.zip"
+$OpenSSHFolderName = "OpenSSH-Win64"
+$OpenSSHFolderPath = "C:\Program Files\OpenSSH-Win64"
+
+# Download OpenSSH
+Start-Process -FilePath "gsutil.cmd" -ArgumentList "cp", $OpenSSHZipURL, "C:\install\" -Wait
+
+# Extract OpenSSH
+Expand-Archive -Path "C:\install\$OpenSSHZipName" -DestinationPath $OpenSSHFolderPath
+
+# Configure OpenSSH service
+& "$OpenSSHFolderPath\$OpenSSHFolderName\install-sshd.ps1"
+& "$OpenSSHFolderPath\$OpenSSHFolderName\ssh-keygen.exe" -A
+Set-Service sshd -StartupType Automatic
+Start-Service sshd
+
+# Add firewall rule
+New-NetFirewallRule -Name "OpenSSH" -DisplayName "OpenSSH" -Enabled True -Direction Inbound -Protocol TCP -LocalPort 22
+
+# Set default shell to PowerShell
+Set-ItemProperty "HKLM:\SOFTWARE\OpenSSH" DefaultShell "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+
+
+
+
+
+
+

@@ -1,0 +1,81 @@
+# https://www.packer.io/docs/builders/amazon/ebs
+write-output "Running User Data Script"
+write-host "(host) Running User Data Script"
+Set-ExecutionPolicy Unrestricted -Scope LocalMachine -Force -ErrorAction Ignore
+
+# Don't set this before Set-ExecutionPolicy as it throws an error
+$ErrorActionPreference = "stop"
+
+# Remove HTTP listener
+Remove-Item -Path WSMan:\Localhost\listener\listener* -Recurse
+
+# Create a self-signed certificate to let ssl work
+$Cert = New-SelfSignedCertificate -CertstoreLocation Cert:\LocalMachine\My -DnsName "packer"
+New-Item -Path WSMan:\LocalHost\Listener -Transport HTTPS -Address * -CertificateThumbPrint $Cert.Thumbprint -Force
+
+
+
+##Create install folder and use for Gpo
+
+New-Item -ItemType Directory -Force -Path C:\install
+
+
+# Download and install OpenSSH-Win64
+$AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
+[System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
+
+ 
+Write-Host "Downloading OpenSSH binary"
+Add-Content C:\Install\gcp_soi.log "[$(Get-Date)] => Installing OpenSSH`n"
+
+# Set variables
+$OpenSSHZipName = "OpenSSH-Win64.zip"
+$OpenSSHZipURL = "gs://windowsamigcp2/ssh/OpenSSH-Win64.zip"
+$OpenSSHFolderName = "OpenSSH-Win64"
+$OpenSSHFolderPath = "C:\Program Files"
+
+# Download OpenSSH
+Start-Process -FilePath "gsutil.cmd" -ArgumentList "cp", $OpenSSHZipURL, "C:\install\" -Wait
+
+# Extract OpenSSH
+Expand-Archive -Path "C:\install\$OpenSSHZipName" -DestinationPath $OpenSSHFolderPath -Force
+
+# Configure OpenSSH service
+#& "$OpenSSHFolderPath\$OpenSSHFolderName\install-sshd.ps1"
+#& "$OpenSSHFolderPath\$OpenSSHFolderName\ssh-keygen.exe" -A
+
+#Install OpenSSH
+C:
+CD '\Program Files\OpenSSH-Win64'
+.\install-sshd.ps1
+
+& "$OpenSSHFolderPath\$OpenSSHFolderName\ssh-keygen.exe" -A
+
+# Service configuration
+Get-Service -DisplayName "OpenSSH SSH Server" | Set-Service -StartupType Automatic
+while ((Get-Service -DisplayName "OpenSSH SSH Server").Status -ne 'Running')
+{
+Start-Sleep -Seconds 5
+Get-Service -DisplayName "OpenSSH SSH Server" | Start-Service
+}
+
+
+#Verify the service status
+$CheckPortService = Get-NetTcpConnection | select local*,remote*,state,@{Name="Process";Expression={(Get-Process -Id $_.OwningProcess).ProcessName}}
+$CheckPortService | Where-Object -Property LocalPort -eq 22 | ft
+
+
+# Add firewall rule
+Get-NetFirewallRule -Name *OpenSSH*
+New-NetFirewallRule -Name "OpenSSH" -DisplayName "OpenSSH" -Enabled True -Direction Inbound -Protocol TCP -LocalPort 22
+
+# Set default shell to PowerShell
+#Changing Default Shell to PowerShell
+New-Item -Path HKLM:\SOFTWARE\OpenSSH -Force
+New-ItemProperty -Path HKLM:\SOFTWARE\OpenSSH `
+    -Name DefaultShell `
+    -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
+    -ErrorAction Stop
+
+Stop-Transcript
+
